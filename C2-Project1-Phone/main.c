@@ -9,7 +9,7 @@ typedef struct phone_data
 	char phone1[20];
 	char phone2[20];
 	char memo[40];
-	int startPos;
+	int lineNumber;
 	struct phone_data* front;
 	struct phone_data* rear;
 }phone_data;
@@ -24,17 +24,18 @@ typedef struct array_list
 array_list list;
 FILE* fp;
 
-phone_data* ReadAndMakeData(char buffer[41])
+phone_data* ReadAndMakeData(const char buffer[41])
 {
-	phone_data* temp_data = (phone_data*)malloc(sizeof(phone_data));
+	phone_data* temp_data = (phone_data*)malloc(sizeof(phone_data));//함수 안에서 동적할당하는 습관은 좋지 않으나.. 끝나고 free에서 해제.
+	static int line = 0; //이 함수 안에서는 전역변수로 써야 함. linked list는 ordered 상태이므로 원래 txt에서 몇번째 라인인지.
 	temp_data->name[0] = '\0';
 	temp_data->phone1[0] = '\0';
 	temp_data->phone2[0] = '\0';
 	temp_data->memo[0] = '\0';
 	int i = 0, start = 0, select = 0;
-	for (select = 0; buffer[i] != '\0' && buffer[i] != '\n'; select++) //�� ���� �о�´�
+	for (select = 0; buffer[i] != '\0' && buffer[i] != '\n' && buffer[i] != EOF; select++) //어느 데이터에 저장할지.
 	{
-		for (start = 0; buffer[i] != ':' && buffer[i] != '\n'&&buffer[i] !='\0';) //�ݷб��� �д´�.
+		for (start = 0; buffer[i] != ':' && buffer[i] != '\n' && buffer[i] != '\0' && buffer[i] != EOF;) //token 파씽.
 		{
 			switch (select)
 			{
@@ -54,18 +55,18 @@ phone_data* ReadAndMakeData(char buffer[41])
 				assert(0, "fail copy");
 			}
 		}
-		switch (select)
+		switch (select) //문자열 마지막은 null을 넣어줘야 함.
 		{
 		case 0:
 			temp_data->name[start] = '\0';
-			break;	 
-		case 1:		 
+			break;
+		case 1:
 			temp_data->phone1[start] = '\0';
-			break;	 
-		case 2:		 
+			break;
+		case 2:
 			temp_data->phone2[start] = '\0';
-			break;	 
-		case 3:		 
+			break;
+		case 3:
 			temp_data->memo[start] = '\0';
 			break;
 		default:
@@ -73,30 +74,12 @@ phone_data* ReadAndMakeData(char buffer[41])
 		}
 		i++;
 	}
-	/*char* ptr = strtok(buffer, ":");
-	while(ptr != NULL)
-	{
-		switch(start++)
-		{
-		case 0:
-			strcpy(temp_data->name, ptr);
-			break;
-		case 1:
-			strcpy(temp_data->phone1, ptr);
-			break;
-		case 2:
-			strcpy(temp_data->phone2, ptr);
-			break;
-		case 3:
-			strcpy(temp_data->memo, ptr);
-			break;
-		}
-		ptr = strtok(NULL, ":");
-	}*/
+
+	temp_data->lineNumber = line++; //본인이 몇번째 라인인지 저장.
 	return temp_data;
 }
 
-void InitList()
+void InitList() //doubly linked list
 {
 	list.tail = (phone_data*)malloc(sizeof(phone_data));
 	list.head = (phone_data*)malloc(sizeof(phone_data));
@@ -107,38 +90,35 @@ void InitList()
 	list.tail->rear = NULL;
 	list.tail->front = list.head;
 	list.size = 0;
-	list.head->startPos = 0;
 	list.tail->rear = 0;
 }
 
 void Free()
 {
 	phone_data* ptr = list.head;
-	while(ptr->rear != NULL)
+	while (ptr->rear != NULL)
 	{
 		ptr = ptr->rear;
 		free(ptr->front);
 	}
-	fclose(fp);
+	if (!fp) //del option이 정상적으로 작동했을 때 fclose는 중복됨.
+	{
+		fclose(fp);
+	}
 }
 
-//���� ����Ʈ.
+//삽입 복잡도가 O(N)이지만.. 정렬된 상태를 유지.
 void InsertList(phone_data* data)
 {
 	phone_data* ptr = list.head;
-	while(ptr->rear != NULL)
+	while (ptr->rear != NULL)
 	{
-		if(ptr->rear->name[0] == '\0' || strcmp(ptr->rear->name,data->name)>0)
+		if (ptr->rear->name[0] == '\0' || strcmp(ptr->rear->name, data->name) > 0)
 		{
 			data->front = ptr;
 			data->rear = ptr->rear;
 			ptr->rear->front = data;
 			ptr->rear = data;
-			data->startPos = data->front->startPos
-				+ strlen(data->front->name)
-				+ strlen(data->front->phone1)
-				+ strlen(data->front->phone2)
-				+ strlen(data->front->memo);
 			break;
 		}
 		ptr = ptr->rear;
@@ -148,13 +128,14 @@ void InsertList(phone_data* data)
 void PrintList()
 {
 	phone_data* ptr = list.head->rear;
-	while(ptr->rear != NULL)
+	while (ptr->rear != NULL)
 	{
-		printf("%s %s %s %s\n", ptr->name,ptr->phone1,ptr->phone2,ptr->memo);
+		printf("%s %s %s %s\n", ptr->name, ptr->phone1, ptr->phone2, ptr->memo);
 		ptr = ptr->rear;
 	}
 }
 
+//파일을 읽고 doubly linked list를 만들어주는 함수
 void ReadFilesAndMakeList()
 {
 	fp = fopen("data.txt", "r+");
@@ -171,37 +152,38 @@ void ReadFilesAndMakeList()
 	}
 }
 
-void CheckAndPrintList(char *str)
+//문자열 있는지 확인하고 출력해줌.
+void CheckAndPrintList(char* str)
 {
 	phone_data* ptr = list.head->rear;
 	int count = 0, isPrint = 0;
-	while(ptr->rear != NULL)
+	while (ptr->rear != NULL)
 	{
 		int find = 0;
-		if(strstr(ptr->name,str) != NULL)
+		if (strstr(ptr->name, str) != NULL)
 		{
 			find = 1;
 		}
-		if (strstr( ptr->phone1,str) != NULL)
+		if (strstr(ptr->phone1, str) != NULL)
 		{
 			find = 1;
 		}
-		if (strstr( ptr->phone2,str) != NULL)
+		if (strstr(ptr->phone2, str) != NULL)
 		{
 			find = 1;
 		}
-		if (strstr( ptr->memo,str) != NULL)
+		if (strstr(ptr->memo, str) != NULL)
 		{
 			find = 1;
 		}
-		if(find)
+		if (find)
 		{
 			isPrint = 1;
-			printf("%d : %s %s %s %s\n",++count, ptr->name, ptr->phone1, ptr->phone2, ptr->memo);
+			printf("%d : %s %s %s %s\n", ++count, ptr->name, ptr->phone1, ptr->phone2, ptr->memo);
 		}
 		ptr = ptr->rear;
 	}
-	if(isPrint)
+	if (isPrint)
 	{
 		printf("match found.\n");
 	}
@@ -211,11 +193,13 @@ void CheckAndPrintList(char *str)
 	}
 }
 
-void AddNumber(int cnt, char *data[])
+//새로 데이터 파일을 만들 때.
+//cnt는 token의 갯수이다.
+void AddNumber(const int cnt, char* data[])
 {
-	//ToDo ���� �д°� ���� �� �Ǵµ� ����ó������ ������ ���� 
+	//ToDo 
 	char isAdd;
-	for(int i=0;i<cnt;i++)
+	for (int i = 0; i < cnt; i++)
 	{
 		printf("%s ", data[i]);
 	}
@@ -223,43 +207,44 @@ void AddNumber(int cnt, char *data[])
 	printf("add? [Y/N]: ");
 	scanf("%c", &isAdd);
 
-	if(isAdd == 'Y')
+	if (isAdd == 'Y')
 	{
-		char* copyData = (char*)malloc(sizeof(char) * 61);
+		char* copyData = (char*)malloc(sizeof(char) * 61); //RAII
 		int index = 0;
 
-		for(index = 0; index<4;index++)
+		//strtok를 쓰려고 했으나.. :: <- 이상태에서 따로 처리하는 것이 아닌 한꺼번에 처리하는 거 같아 그냥 구현함.
+		for (index = 0; index < 4; index++)
 		{
 			switch (index)
 			{
 			case 0:
-				strcpy(copyData, data[index]); //�̸�
+				strcpy(copyData, data[index]);
 				strcat(copyData, ":");
 				break;
 			case 1:
-				strcat(copyData, data[index]); //��ȭ��ȣ
+				strcat(copyData, data[index]);
 				strcat(copyData, ":");
-				if (cnt == 2) //�̸��̶� ��ȭ��ȣ �ۿ� ���ٴ� �̾߱�
+				if (cnt == 2)
 				{
 					strcat(copyData, ":\n");
 					index = 4;
 				}
 				break;
 			case 2:
-				if (cnt == 3) //�޸� �ִٴ� �̾߱�
+				if (cnt == 3) // ::2개 있는 상황
 				{
 					strcat(copyData, ":");
 					strcat(copyData, data[index]);
 					strcat(copyData, "\n");
 					index = 4;
 				}
-				else //2��° ��ȭ��ȣ�� �ִٴ� �̾߱�.
+				else
 				{
 					strcat(copyData, data[index]);
 					strcat(copyData, ":");
 				}
 				break;
-			case 3: //��� ������ �ϼ�
+			case 3: //다 있는 상황
 				strcat(copyData, data[index]);
 				strcat(copyData, "\n");
 				break;
@@ -267,10 +252,38 @@ void AddNumber(int cnt, char *data[])
 				assert(0, "error : in AddNumber Function!");
 			}
 		}
-		
+
 		fputs(copyData, fp);
 		free(copyData);
 	}
+}
+
+//fwrite로 문자를 대체하려 했으나.. 파일이 깨져 새로 만들어서 대체하는 방식을 채택.
+void MakeNewDataTxtFile(const int deleteLine)
+{
+	FILE* newFp = fopen("replace.txt", "w");
+	int temp = 0;
+
+	rewind(fp);
+	char ch = getc(fp);
+	while (ch != EOF)
+	{
+		if (temp != deleteLine) //해당하는 라인이 아니면 파일에 쓰기
+		{
+			putc(ch, newFp);
+		}
+		if (ch == '\n')
+		{
+			temp++;
+		}
+		ch = getc(fp);
+	}
+	fclose(newFp);
+	fclose(fp); //중복 free 생각!
+	//remove 함수는 fclose()를 하지 않거나, 현재 사용중이면 작동하지 않고 -1을 리턴한다.
+	remove("data.txt");
+	rename("replace.txt", "data.txt");
+	remove("replace.txt");
 }
 
 void DeleteList(const char* deleteData)
@@ -279,11 +292,13 @@ void DeleteList(const char* deleteData)
 	int cnt = 0;
 	int sel;
 	phone_data* ptr = list.head->rear;
+	// 부합하는 list를 뽑기 위한 것.배열처럼 쓰기 위함.
+	// 들어오는 데이터를 예측하기 힘들기 때문에 어쩔수없이 동적할당.
 	phone_data* vector = (phone_data*)malloc(sizeof(phone_data) * list.size);
-	while(ptr->rear != NULL)
+	while (ptr->rear != NULL)
 	{
 		int find = 0;
-		if(strstr(ptr->name,deleteData)!=NULL)
+		if (strstr(ptr->name, deleteData) != NULL)
 		{
 			find = 1;
 		}
@@ -306,47 +321,50 @@ void DeleteList(const char* deleteData)
 		}
 		ptr = ptr->rear;
 	}
-	printf("which one? ");
-	scanf("%d", &sel);
-	if(sel<0 && sel < cnt)
+	if (cnt > 0)
 	{
-		fseek(fp, (long)vector[sel].startPos, SEEK_SET);
-		fputc()
-		//�� ������ �ű� ���� �ش� ���ڿ� ó������ �����͸� �ű�.
+		printf("which one? ");
+		scanf("%d", &sel);
+		if (sel > 0 && sel <= cnt)
+		{
+			MakeNewDataTxtFile(vector[sel - 1].lineNumber);
+		}
 	}
+	free(vector);
 }
 
-void CheckOption(int argc,char *argv[])
+void CheckOption(int argc, char* argv[])
 {
-	if(argc > 1 &&argv[1][0] == '?') //�����쿡���� ?�� �޴� �� ����.
+	if (argc > 1 && argv[1][0] == '-')
 	{
-		switch(argv[1][1])
+		switch (argv[1][1])
 		{
 		case 'a':
-			AddNumber(argc-2,argv + 2);
+			AddNumber(argc - 2, argv + 2); //앞에 쓸대없는 부분 제거, 그리고 포인터 증감연산을 함으로써 필요한 string만 취함.
 			break;
 		case 'd':
+			DeleteList(argv[2]);
 			break;
 		case 'l':
 			PrintList();
 			break;
-		default :
+		default:
 			assert(0, "Call default : in CheckOption function");
 		}
 	}
-	else //�ɼ��� ���� �ʾ��� �� ã��.
+	else
 	{
 		CheckAndPrintList(argv[1]);
 	}
 }
 
-int main(int argc,char *argv[])
+int main(int argc, char* argv[])
 {
-	
 	InitList();
 	ReadFilesAndMakeList();
-	CheckOption(argc,argv);
+	CheckOption(argc, argv);
 
 	Free();
+
 	return 0;
 }
